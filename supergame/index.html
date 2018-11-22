@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>gameforuiqi</title>
+    <style>
+        canvas{
+            border:1px solid black;
+        }
+        #left-div{
+         float: left;
+        }
+        #right-div{
+            float:right
+        }
+        #label-control{
+            background-color:#4b3f39;
+            font-family: 'Open Sans', sans-serif;
+            font-size:30px;
+            text-decoration:none;
+            color:#fff;
+            position:relative;
+            padding:10px 20px;
+            padding-right:50px;
+            background-image: linear-gradient(bottom, rgb(62,51,46) 0%, rgb(101,86,78) 100%);
+            box-shadow: inset 0px 1px 0px #9e8d84, 0px 5px 0px 0px #322620, 0px 10px 5px #999;
+            border:solid 10px #4d4e53;
+            border-radius:20px 20px 20px 20px;
+            margin: 6px 10px;
+        }
+        </style>
+</head>
+<body>
+<div id="left-div">
+<canvas id="id-canvas" width="950" height="600"></canvas>
+</div>
+<div id="right-div">
+    <label>boss血量</label><br>
+    <canvas id="boss-canvas" width="325" height="80"></canvas><br>
+    <label>hero血量</label><br>
+    <canvas id="shooter-canvas" width="325" height="80"></canvas><br>
+    <label style="padding-right: 30px">移动射击:u</label>
+    <label>爆头一击:i</label><br>
+    <img src="moveshoot.jpg"  alt="移动射击"  style="padding-right: 70px"/>
+    <img src="headshot.JPG" alt="爆头一击"/><br>
+    <label id="u-id" style="padding-right: 100px">可以使用</label>
+    <label id="i-id">可以使用</label><br>
+    <br>
+    <br>
+    <label id="label-control">开始游戏</label><br><br><br>
+    <audio src="bgm.mp3"  autoplay="autoplay" loop="loop" ></audio>
+    <audio src="bulletmusic.mp3" id="b-audio"></audio><br>
+    <div id="adddiv">
+        <p>游戏说明:wsad上下左右 j普通攻击 u和i是技能<br>
+        普通攻击冷却时间2秒
+        </p>
+    </div>
+    <label id="timeall">0</label>
+    <div id="onloaddiv" hidden="hidden">
+        <form method="post">
+            <input type="submit" value="提交时间" name="0" id="onloadsubmit">
+        </form>
+    </div>
+
+</div>
+<script src="jquery.js"></script>
+<script>
+    //draw 之前一定要clear!!!
+    var adddiv=document.getElementById("adddiv")
+    var bulletaudio=document.getElementById("b-audio")
+    var canvas=$("#id-canvas")
+    var context=canvas[0].getContext("2d")
+    var bosscanvas=$("#boss-canvas")
+    var bosscontext=bosscanvas[0].getContext("2d")
+    var shootercanvas=$("#shooter-canvas")
+    var shootercontext=shootercanvas[0].getContext("2d")
+
+    var boss={
+        x:500,
+        y:200,
+        vx:2,
+        vy:2,
+        //skillauto
+        skillidivided:1,
+        skillidivisor:200,
+        allhp:325,
+        hp:325,
+        skillauto:[],
+        skillbest:{bestdivided:0,bestdivisor:200,bestarray:[],intervaltime:100},
+        setboss:function(){
+            var bossimage=new Image()
+            bossimage.src=(shooter.x<=boss.x) ? "boss.jpg":"boss1.jpg"
+            context.drawImage(bossimage,boss.x,boss.y)
+        },
+
+        //todo-bossbullet(pushin draw change )
+        skillofautotrace:function(){
+            if(boss.skillidivided%boss.skillidivisor==0){
+                var bossbullet=new Image()
+                bossbullet.src="bossbullet.jpg"
+                boss.skillauto.push({x:boss.x,y:boss.y,v:8,image:bossbullet,livetime:0,alltime:3.5,addtime:0.04})
+            }
+            boss.skillidivided+=1
+        },
+        drawskillauto:function(){
+            for(var i=0;i<boss.skillauto.length;i+=1){
+                context.drawImage(boss.skillauto[i].image,boss.skillauto[i].x,boss.skillauto[i].y)
+            }
+        },
+
+        moveofautobullet:function(){
+            for(var i=0;i<boss.skillauto.length;i+=1){
+                var v=boss.skillauto[i].v
+                var x=boss.skillauto[i].x
+                var y=boss.skillauto[i].y
+                var gapofx=Math.abs(x-shooter.x)
+                var gapofy=Math.abs(y-shooter.y)
+                var xie=Math.pow(gapofy*gapofy+gapofx*gapofx,0.5)
+                var newx=Math.round(v*gapofx/xie)
+                var newy=Math.round(v*gapofy/xie)
+                if(x<shooter.x){
+                    boss.skillauto[i].x+=newx
+                }
+                else if(x>shooter.x){
+                    boss.skillauto[i].x-=newx
+                }
+                if(y<shooter.y){
+                    boss.skillauto[i].y+=newy
+                }
+                else if(y>shooter.y){
+                    boss.skillauto[i].y-=newy
+                }
+            }
+        },
+        autoclear:function(){
+            for(var i=0;i<boss.skillauto.length;i+=1){
+                if(boss.skillauto[i].livetime>=boss.skillauto[i].alltime){
+                    boss.skillauto.splice(i,1)
+                }
+                else{
+                    boss.skillauto[i].livetime+=boss.skillauto[i].addtime
+                }
+            }
+        }
+    }
+
+    function drawofbossandshootercanvas(){
+        //clear bosscanvas
+        bosscontext.clearRect(0,0,bosscanvas[0].width,bosscanvas[0].height)
+        //draw bosscanvas
+        bosscontext.fillStyle="red"
+        bosscontext.fillRect(0,0,Math.round((boss.hp/boss.allhp)*325),bosscanvas[0].height)
+        //clear shootercanvas
+        shootercontext.clearRect(0,0,shootercanvas[0].width,shootercanvas[0].height)
+        //draw shootercanvas
+        shootercontext.fillStyle="red"
+        shootercontext.fillRect(0,0,Math.round((shooter.hp/shooter.allhp)*325),shootercanvas[0].height)
+    }
+    //information of shooter including bullet skill ..
+    var shooter= {
+        x: 300,
+        y: 300,
+        vx: 10,
+        vy: 10,
+        bulletpower:5,
+        //在 j u i均可改变
+        shootaction:false,
+        shoottimes:6,
+        allhp:100,
+        hp:100,
+        order: true,
+        movelist:{moveindex:0,indexlist:[70,70,70],height:166,blanklist:[0,70,70]},
+        bulletlist: [],
+        vofbu: 40,
+        shootlv: [],
+        skillu: {ulv: 0, udemo: 9, upanduan: true, utime: 0.05},
+        skilli: {power:10,lv: 60, x: [], y: [], order: [], image: [], itime: 0.05, ipanduan: true, ialltime: 9},
+        skillo: {image: [], x: [], y: []},
+        //drawshooterhp!!
+        drawshooter: function () {
+            if(shooter.shootaction){
+                var shootimage=new Image()
+                if(shooter.order){
+                    shootimage.src="rightshoot.jpg"
+                }
+                else{
+                    shootimage.src="leftshoot.jpg"
+                }
+                context.drawImage(shootimage,shooter.x,shooter.y)
+            }
+            else {
+
+                var right = new Image()
+                right.src = "right.jpg"
+                var left = new Image()
+                left.src = "left.jpg"
+
+                var thekey = undefined
+                var flag = false
+                for (var key in game.key_pressed) {
+                    if ((key == "a" || key == "d") && game.key_pressed[key] == true) {
+                        flag = true
+                        thekey = key
+                        break
+                    }
+                }
+                if (flag) {
+                    if (thekey == "d") {
+                        context.drawImage(right, shooter.movelist.blanklist[(shooter.movelist.moveindex) % 3], 0, shooter.movelist.indexlist[shooter.movelist.moveindex % 3], shooter.movelist.height, shooter.x, shooter.y, shooter.movelist.indexlist[shooter.movelist.moveindex % 3], shooter.movelist.height)
+                    }
+                    else {
+                        context.drawImage(left, shooter.movelist.blanklist[(shooter.movelist.moveindex) % 3], 0, shooter.movelist.indexlist[shooter.movelist.moveindex % 3], shooter.movelist.height, shooter.x, shooter.y, shooter.movelist.indexlist[shooter.movelist.moveindex % 3], shooter.movelist.height)
+                    }
+                    shooter.movelist.moveindex += 1
+                }
+                else {
+                    if (shooter.order) {
+                        context.drawImage(right, shooter.movelist.blanklist[(shooter.movelist.moveindex) % 3], 0, shooter.movelist.indexlist[shooter.movelist.moveindex % 3], shooter.movelist.height, shooter.x, shooter.y, shooter.movelist.indexlist[shooter.movelist.moveindex % 3], shooter.movelist.height)
+                    }
+                    else {
+                        context.drawImage(left, shooter.movelist.blanklist[(shooter.movelist.moveindex) % 3], 0, shooter.movelist.indexlist[shooter.movelist.moveindex % 3], shooter.movelist.height, shooter.x, shooter.y, shooter.movelist.indexlist[shooter.movelist.moveindex % 3], shooter.movelist.height)
+                    }
+
+                }
+
+            }
+            },
+        drawbullet: function () {
+            for (var i = 0; i < shooter.bulletlist.length; i += 1) {
+                context.fillStyle = "#FFD700"
+                context.beginPath()
+                if (shooter.bulletlist[i].order == "right") {
+                    context.arc(shooter.bulletlist[i].x + 40, shooter.bulletlist[i].y, 10, 0, Math.PI * 2)
+                }
+                else {
+                    context.arc(shooter.bulletlist[i].x - 40, shooter.bulletlist[i].y, 10, 0, Math.PI * 2)
+                }
+                context.closePath()
+                context.fill();
+            }
+        }
+        ,
+        drawskilli: function () {
+            for (var i = 0; i < shooter.skilli.x.length; i += 1) {
+                context.drawImage(shooter.skilli.image[i], shooter.skilli.x[i], shooter.skilli.y[i])
+            }
+        },
+    }
+    var game={
+        firstsetbg:function(){
+            var background=new Image()
+            background.src="background.jpg"
+            background.onload=function(){
+                context.drawImage(background,0,0)
+            }
+        },
+        setbackground:function(){
+            var background=new Image()
+            background.src="background.jpg"
+            context.drawImage(background,0,0)
+        },
+        key_pressed:{}
+    }
+    game.firstsetbg()
+
+    document.addEventListener("keyup",function(e){
+        game.key_pressed[e.key]=false
+    });
+//技能u(移动射击 )事件检测
+    document.addEventListener("keydown",function(event){
+        var key=event.key
+        if(key=="u" && shooter.skillu.upanduan){
+            if(shooter.order==true){
+                shooter.bulletlist.push({x:shooter.x+40,y:shooter.y+18,order:"right"})
+            }
+            else{
+                shooter.bulletlist.push({x:shooter.x+40,y:shooter.y+18,order:"left"})
+            }
+            shooter.skillu.ulv+=1
+            shooter.shootaction=true
+            shooter.shoottimes=0
+            if(shooter.skillu.ulv==9){
+                shooter.skillu.upanduan=false
+            }
+        }
+    })
+    function setcoolperiod(){
+        var ulable=document.getElementById("u-id")
+        var ucool=Math.round(9-shooter.skillu.ulv)
+        console.log()
+        if(ucool==0){
+            var time=Math.round(shooter.skillu.udemo)
+            if(time==9){
+                ulable.innerHTML="可以使用"
+            }
+            else{
+                ulable.innerHTML=time
+            }
+        }
+
+        else{
+            ulable.innerHTML="可以使用"
+        }
+        var ilabel=document.getElementById("i-id")
+        var icool=Math.round(shooter.skilli.ialltime)
+        if(icool==9){
+            ilabel.innerHTML="可以使用"
+        }
+        else{
+            ilabel.innerHTML=icool
+        }
+    }
+
+//技能i(爆头一击)事件检测
+    document.addEventListener("keydown",function(event){
+        var key=event.key
+        if(key=="i" && shooter.skilli.ipanduan){
+            var shottohead=new Image()
+            shottohead.src=(shooter.order==true)?"headshot1.JPG":"headshot.JPG"
+            shooter.skilli.image.push(shottohead)
+            shooter.skilli.x.push(shooter.x)
+            shooter.skilli.y.push(shooter.y)
+            var iorder=(shooter.order==true) ?"right":"left"
+            shooter.skilli.order.push(iorder)
+            shooter.skilli.ipanduan=false
+            shooter.shootaction=true
+            shooter.shoottimes=0
+        }
+    })
+
+//'wsad' and the key of bullet j
+    document.addEventListener("keydown",function(e){
+        game.key_pressed[e.key]=true
+        if(e.key=="j"){
+            var addflag=false
+            if(shooter.shootlv.length==0){
+                addflag=true
+                var mydate=new Date()
+                shooter.shootlv.push(mydate.getSeconds())
+            }
+            else{
+                var nowit=new Date()
+                var nowsecond=nowit.getSeconds()
+                if(nowsecond<shooter.shootlv[0]){
+                    nowsecond+=60
+                    if(nowsecond-shooter.shootlv[0]>=2){
+                        addflag=true
+                        shooter.shootlv.splice(0,1)
+                        shooter.shootaction=true
+                    }
+                }
+                else{
+                    if(nowsecond-shooter.shootlv[0]>=2){
+                        addflag=true
+                        shooter.shootlv.splice(0,1)
+                        shooter.shootlv.push(nowsecond)
+                    }
+                }
+            }
+
+            if(shooter.order==true && addflag){
+                    shooter.bulletlist.push({x:shooter.x+40,y:shooter.y+18,order:"right"})
+                    shooter.shootaction=true
+                    shooter.shoottimes=0
+            }
+            else if(shooter.order==false && addflag){
+                    shooter.bulletlist.push({x:shooter.x+40,y:shooter.y+18,order:"left"})
+                    shooter.shootaction=true
+                shooter.shoottimes=0
+
+            }
+
+        }
+    });
+    //boss'sbullet
+    function bulletofbosswithshooter() {
+        for (var i = 0; i < boss.skillauto.length; i += 1) {
+            if (boss.skillauto[i].x >= shooter.x && boss.skillauto[i].y>=shooter.y) {
+                if ((boss.skillauto[i].x - shooter.x) < 68 && boss.skillauto[i].y-shooter.y<40) {
+                    shooter.hp -= 30
+                    boss.skillauto.splice(i, 1)
+                }
+            }
+            else if (boss.skillauto[i].x < shooter.x && boss.skillauto[i].y>=shooter.y) {
+                if ((shooter.x-boss.skillauto[i].x) < 68 && boss.skillauto[i].y-shooter.y<40) {
+                    shooter.hp -= 30
+                    boss.skillauto.splice(i, 1)
+                }
+            }
+            else if (boss.skillauto[i].x < shooter.x && boss.skillauto[i].y<shooter.y) {
+                if ((shooter.x-boss.skillauto[i].x) < 68 && shooter.y-boss.skillauto[i].y<40) {
+                    shooter.hp -= 30
+                    boss.skillauto.splice(i, 1)
+                }
+            }
+            else if (boss.skillauto[i].x >= shooter.x && boss.skillauto[i].y<shooter.y) {
+                if ((boss.skillauto[i].x - shooter.x) < 68 && shooter.y-boss.skillauto[i].y<40) {
+                    shooter.hp -= 30
+                    boss.skillauto.splice(i, 1)
+                }
+            }
+        }
+    }
+    //shooter's bullet and boss --collide
+    //各项参数(bossimage(width:150 height:199) ordinary bullets(r=10 eg: bulletlist[0].x) iskill(48 61))
+    function bulletwithboss() {
+        for (var i = 0; i < shooter.bulletlist.length; i += 1) {
+            var order = shooter.bulletlist[i].order
+            var x = shooter.bulletlist[i].x
+            var y = shooter.bulletlist[i].y
+            var flag = false
+            if (order == "right" && (0 <= (x - boss.x) && (x - boss.x) <= 150) && (0 <= (y - boss.y) && (y - boss.y) <= 190)) {
+                flag = true
+            }
+            if (order == "left" && (0 <= (x - boss.x) && (x - boss.x) <= 150) && (0 <= (y - boss.y) && (y - boss.y) <= 190)) {
+                flag=true
+            }
+            if(flag){
+                shooter.bulletlist.splice(i,1)
+                //boss hp down
+                boss.hp-=shooter.bulletpower
+                bulletaudio.preload="preload"
+            }
+        }
+    }
+    //skilli: {lv: 60, x: [], y: [], order: [], image: [], itime: 0.05, ipanduan: true, ialltime: 9},
+    function skilliwithboss(){
+        for(var i=0;i<shooter.skilli.x.length;i+=1){
+            var order=shooter.skilli.order[i]
+            var x=shooter.skilli.x[i]
+            var y=shooter.skilli.y[i]
+            var flag=false
+            if (order == "right" && (0 <= (x - boss.x) && (x - boss.x) <= 150) && (0 <= (y - boss.y) && (y - boss.y) <= 190)) {
+                flag = true
+            }
+            if (order == "left" && (0 <= (x - boss.x) && (x - boss.x) <= 150) && (0 <= (y - boss.y) && (y - boss.y) <= 190)) {
+                flag=true
+            }
+            if(flag){
+                shooter.skilli.x.splice(i,1)
+                shooter.skilli.y.splice(i,1)
+                shooter.skilli.order.splice(i,1)
+                shooter.skilli.image.splice(i,1)
+                //boss hp down
+                boss.hp-=shooter.skilli.power
+            }
+        }
+    }
+    //change of game ---bossmove
+    function bossmove(){
+        var horder=undefined
+        var vorder=undefined
+        if(boss.x<shooter.x){
+            horder="right"
+        }
+        else{
+            horder="left"
+        }
+        if(boss.y<shooter.y){
+            vorder="down"
+        }
+        else if(boss.y==shooter.y){
+            vorder="random"
+        }
+        else{
+            vorder="up"
+        }
+        if(horder=="right" && vorder=="up"){
+            boss.x+=boss.vx
+            boss.y-=boss.vy
+        }
+        else if(horder=="right" && vorder=="down"){
+            boss.x+=boss.vx
+            boss.y+=boss.vy
+        }
+        else if(horder=="right" && vorder=="random"){
+            var num=Math.floor(Math.random()*2)
+            //up
+            if(num==0){
+               boss.x+=boss.vx
+               boss.y-=boss.vy
+            }
+            else{
+                boss.x+=boss.vx
+                boss.y+=boss.vy
+            }
+        }
+        else if(horder=="left" && vorder=="up"){
+            boss.x-=boss.vx
+            boss.y-=boss.vy
+        }
+        else if(horder=="left" && vorder=="down"){
+            boss.x-=boss.vx
+            boss.y+=boss.vy
+        }
+        else if(horder=="left" && vorder=="random"){
+            var num=Math.floor(Math.random()*2)
+            //up
+            if(num==0){
+                boss.x-=boss.vx
+                boss.y-=boss.vy
+            }
+            else{
+                boss.x-=boss.vx
+                boss.y+=boss.vy
+            }
+        }
+    }
+    //change of game ---shootermove
+    function shootermove(){
+        for(var key in game.key_pressed){
+            if(key=="a" && game.key_pressed[key]==true && (shooter.x-shooter.vx)>0){
+                shooter.x-=shooter.vx
+                if(shooter.order==true){
+                    shooter.order=false
+                }
+            }
+            else if(key=="d" && game.key_pressed[key]==true && (shooter.x+shooter.vx)<=930){
+                shooter.x+=shooter.vx
+                if(shooter.order==false){
+                    shooter.order=true
+                }
+
+            }
+            else if(key=="w" && game.key_pressed[key]==true && (shooter.y-shooter.vy)>0){
+                shooter.y-=shooter.vy
+            }
+            else if(key=="s" && game.key_pressed[key]==true && (shooter.y+shooter.vy)<430){
+                shooter.y+=shooter.vy
+            }
+        }
+    }
+    //change of game bullet move
+    function bulletmove(){
+        for(var i=0;i<shooter.bulletlist.length;i+=1){
+            if(shooter.bulletlist[i].order=="right"){
+                shooter.bulletlist[i].x+=shooter.vofbu
+            }
+            else{
+                shooter.bulletlist[i].x-=shooter.vofbu
+            }
+        }
+    }
+    //game over
+    var timer=document.getElementById("timeall")
+    var onloaddiv=document.getElementById("onloaddiv")
+    var onloadsubmit=document.getElementById("onloadsubmit")
+    function gameover(){
+
+        if(shooter.hp<=0){
+            alert("您输了")
+            clearInterval(myinterval)
+            labelofcontrol.innerText="再来一局"
+                // <div id="onloaddiv" hidden="hidden">
+                // <form method="post">
+                // <input type="submit" value="提交时间" name="0">
+                // </form>
+                // </div>
+            onloaddiv.hidden=null
+            onloadsubmit.name=timer.innerText
+
+
+        }
+        if(boss.hp<=0){
+            alert("您赢了")
+            clearInterval(myinterval)
+            labelofcontrol.innerText="再来一局"
+            onloaddiv.hidden=null
+            onloadsubmit.name=timer.innerText
+        }
+    }
+    //siklli move
+    function skillimove(){
+        for(var i=0;i<shooter.skilli.x.length;i+=1){
+            if(shooter.skilli.order[i]=="right"){
+                shooter.skilli.x[i]+=shooter.skilli.lv
+            }
+            else{
+                shooter.skilli.x[i]-=shooter.skilli.lv
+            }
+        }
+    }
+    //skill update(cooling-time)
+    function skillupdate(){
+        //update --u
+        if(!shooter.skillu.upanduan){
+            shooter.skillu.udemo-=shooter.skillu.utime
+            if(shooter.skillu.udemo<=0){
+                shooter.skillu.upanduan=true
+                shooter.skillu.ulv=0
+                shooter.skillu.udemo=9
+            }
+        }
+        //update --i
+        if(!shooter.skilli.ipanduan){
+            shooter.skilli.ialltime-=shooter.skilli.itime
+            if(shooter.skilli.ialltime<=0){
+                shooter.skilli.ipanduan=true
+                shooter.skilli.ialltime=9
+            }
+        }
+    }
+    function shootactionchange(){
+        if(shooter.shoottimes<6){
+            shooter.shoottimes+=1
+        }
+        else{
+            shooter.shootaction=false
+        }
+    }
+    function bulletrecycle(){
+       for(var i=0;i<shooter.bulletlist.length;i+=1){
+           var x=shooter.bulletlist[i].x
+           var y=shooter.bulletlist[i].y
+           if((x<0 || x>1000) && (y<0 || y>600)){
+               shooter.bulletlist.splice(i,1)
+           }
+       }
+       for(var i=0;i<shooter.skilli.x.length;i+=1){
+           var x=shooter.skilli.x[i]
+           var y=shooter.skilli.y[i]
+           if((x<0 || x>1000) && (y<0 || y>600)){
+               shooter.skilli.x.splice(i,1)
+               shooter.skilli.y.splice(i,1)
+               shooter.skilli.order.splice(i,1)
+               shooter.skilli.image.splice(i,1)
+           }
+       }
+    }
+    var timer=0
+    function timeadd(){
+        var label=document.getElementById("timeall")
+        timer+=3/50
+        label.innerText=parseInt(timer)
+
+    }
+//all move
+    function changeofg(){
+        shootermove()
+        bulletmove()
+        bossmove()
+        skillimove()
+        skillupdate()
+        shootactionchange()
+        skilliwithboss()
+        bulletwithboss()
+        bulletrecycle()
+        boss.skillofautotrace()
+        boss.moveofautobullet()
+        boss.autoclear()
+        bulletofbosswithshooter()
+        setcoolperiod()
+        gameover()
+        timeadd()
+    }
+    //draw
+    function draw(){
+        // clear it
+        context.clearRect(0,0,canvas[0].width,canvas[0].height)
+        //draw backgounrd
+        game.setbackground()
+        // game.background()
+        //draw charcter
+        shooter.drawshooter()
+        //draw boss
+        boss.setboss()
+        //draw bullet
+        shooter.drawbullet()
+        //draw skilli
+        shooter.drawskilli()
+        //drwa skillauto
+        boss.drawskillauto()
+    }
+    //the process of game
+    function process(){
+        changeofg()
+        draw()
+        drawofbossandshootercanvas()
+    }
+    //控制开始和结束(使用了全局变量)
+    var labelofcontrol=document.getElementById("label-control")
+    labelofcontrol.onclick=function(){
+        if(labelofcontrol.innerText=="开始游戏"){
+            myinterval=setInterval(process,60)
+            labelofcontrol.innerText="暂停游戏"
+        }
+        else if(labelofcontrol.innerText=="暂停游戏"){
+            clearInterval(myinterval)
+            labelofcontrol.innerText="开始游戏"
+        }
+        else if(labelofcontrol.innerText=="再来一局"){
+            document.location.reload()
+        }
+    }
+    </script>
+</body>
+</html>
